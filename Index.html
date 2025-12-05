@@ -208,31 +208,59 @@
             rscaHistory: {}
         };
 
-        // --- Database Service (IndexedDB) ---
+        // --- Storage Service (Robust Fallback) ---
 
-        class DBService {
+        const STORAGE_MODES = {
+            INDEXED_DB: 'IndexedDB (Persistent)',
+            LOCAL_STORAGE: 'LocalStorage (Persistent)',
+            MEMORY: 'Memory (Session Only - UNSAFE)'
+        };
+
+        class StorageService {
             constructor() {
                 this.dbName = 'NavFitDB';
                 this.version = 1;
                 this.db = null;
+                this.mode = STORAGE_MODES.MEMORY; // Default to safest fallback
+                this.memoryStore = { reports: [], seniors: [] };
             }
 
             async init() {
+                // 1. Try IndexedDB
+                try {
+                    await this.initIndexedDB();
+                    this.mode = STORAGE_MODES.INDEXED_DB;
+                    console.log("Storage Mode: IndexedDB");
+                    return;
+                } catch (e) {
+                    console.warn("IndexedDB failed, trying LocalStorage...", e);
+                }
+
+                // 2. Try LocalStorage
+                try {
+                    this.initLocalStorage();
+                    this.mode = STORAGE_MODES.LOCAL_STORAGE;
+                    console.log("Storage Mode: LocalStorage");
+                    return;
+                } catch (e) {
+                    console.warn("LocalStorage failed, using Memory...", e);
+                }
+
+                // 3. Fallback to Memory
+                this.mode = STORAGE_MODES.MEMORY;
+                console.log("Storage Mode: Memory");
+            }
+
+            // --- IndexedDB Implementation ---
+            async initIndexedDB() {
                 return new Promise((resolve, reject) => {
                     const request = indexedDB.open(this.dbName, this.version);
-
                     request.onerror = (event) => reject('DB Error: ' + event.target.error);
-
                     request.onupgradeneeded = (event) => {
                         const db = event.target.result;
-                        if (!db.objectStoreNames.contains('seniors')) {
-                            db.createObjectStore('seniors', { keyPath: 'id' });
-                        }
-                        if (!db.objectStoreNames.contains('reports')) {
-                            db.createObjectStore('reports', { keyPath: 'id' });
-                        }
+                        if (!db.objectStoreNames.contains('seniors')) db.createObjectStore('seniors', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('reports')) db.createObjectStore('reports', { keyPath: 'id' });
                     };
-
                     request.onsuccess = (event) => {
                         this.db = event.target.result;
                         resolve(this.db);
@@ -240,38 +268,76 @@
                 });
             }
 
+            // --- LocalStorage Implementation ---
+            initLocalStorage() {
+                // Test if LS is available
+                const testKey = '__test__';
+                localStorage.setItem(testKey, testKey);
+                localStorage.removeItem(testKey);
+
+                // Load initial state if empty
+                if (!localStorage.getItem('navfit_reports')) localStorage.setItem('navfit_reports', JSON.stringify([]));
+                if (!localStorage.getItem('navfit_seniors')) localStorage.setItem('navfit_seniors', JSON.stringify([]));
+            }
+
+            // --- Unified API ---
+
             async getAll(storeName) {
-                return new Promise((resolve, reject) => {
-                    const transaction = this.db.transaction([storeName], 'readonly');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.getAll();
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
+                if (this.mode === STORAGE_MODES.INDEXED_DB) {
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction([storeName], 'readonly');
+                        const req = tx.objectStore(storeName).getAll();
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                } else if (this.mode === STORAGE_MODES.LOCAL_STORAGE) {
+                    const data = localStorage.getItem(`navfit_${storeName}`);
+                    return data ? JSON.parse(data) : [];
+                } else {
+                    return [...this.memoryStore[storeName]];
+                }
             }
 
             async put(storeName, item) {
-                return new Promise((resolve, reject) => {
-                    const transaction = this.db.transaction([storeName], 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.put(item);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
+                if (this.mode === STORAGE_MODES.INDEXED_DB) {
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction([storeName], 'readwrite');
+                        const req = tx.objectStore(storeName).put(item);
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                } else if (this.mode === STORAGE_MODES.LOCAL_STORAGE) {
+                    const current = await this.getAll(storeName);
+                    const index = current.findIndex(i => i.id === item.id);
+                    if (index >= 0) current[index] = item;
+                    else current.push(item);
+                    localStorage.setItem(`navfit_${storeName}`, JSON.stringify(current));
+                } else {
+                    const index = this.memoryStore[storeName].findIndex(i => i.id === item.id);
+                    if (index >= 0) this.memoryStore[storeName][index] = item;
+                    else this.memoryStore[storeName].push(item);
+                }
             }
 
             async delete(storeName, id) {
-                return new Promise((resolve, reject) => {
-                    const transaction = this.db.transaction([storeName], 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.delete(id);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
+                if (this.mode === STORAGE_MODES.INDEXED_DB) {
+                    return new Promise((resolve, reject) => {
+                        const tx = this.db.transaction([storeName], 'readwrite');
+                        const req = tx.objectStore(storeName).delete(id);
+                        req.onsuccess = () => resolve(req.result);
+                        req.onerror = () => reject(req.error);
+                    });
+                } else if (this.mode === STORAGE_MODES.LOCAL_STORAGE) {
+                    const current = await this.getAll(storeName);
+                    const filtered = current.filter(i => i.id !== id);
+                    localStorage.setItem(`navfit_${storeName}`, JSON.stringify(filtered));
+                } else {
+                    this.memoryStore[storeName] = this.memoryStore[storeName].filter(i => i.id !== id);
+                }
             }
         }
 
-        const db = new DBService();
+        const db = new StorageService();
 
         // --- Utility Functions ---
 
@@ -944,21 +1010,18 @@
             const [activeReportId, setActiveReportId] = useState(null);
             const [view, setView] = useState('dashboard'); // dashboard, editor, profile, matrix, optimization
             const [dbReady, setDbReady] = useState(false);
-            const [dbError, setDbError] = useState(null);
+            const [storageMode, setStorageMode] = useState(null);
             const [selectedReports, setSelectedReports] = useState([]); // IDs for matrix view
 
             // Initialize DB and Load
             useEffect(() => {
                 const init = async () => {
-                    try {
-                        await db.init();
-                        setDbReady(true);
-                        const savedReports = await db.getAll('reports');
-                        setReports(savedReports);
-                    } catch (err) {
-                        console.error("DB Init Error:", err);
-                        setDbError(err.toString());
-                    }
+                    await db.init();
+                    setStorageMode(db.mode);
+                    setDbReady(true);
+
+                    const savedReports = await db.getAll('reports');
+                    setReports(savedReports);
                 };
                 init();
             }, []);
@@ -1122,35 +1185,6 @@
 
             const currentTraits = activeReport.type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
 
-            if (dbError) {
-                return (
-                    <div className="flex flex-col items-center justify-center h-screen bg-red-50 p-8 text-center">
-                        <div className="bg-white p-8 rounded-lg shadow-lg max-w-2xl">
-                            <h1 className="text-2xl font-bold text-red-600 mb-4">Application Error</h1>
-                            <p className="text-gray-700 mb-4">
-                                The application could not start the database. This is likely because you are opening the file directly (file://)
-                                and your browser restricts IndexedDB access in this mode.
-                            </p>
-                            <div className="bg-gray-100 p-4 rounded text-left font-mono text-sm mb-6 overflow-auto">
-                                {dbError}
-                            </div>
-                            <h2 className="text-lg font-bold text-gray-800 mb-2">How to Fix:</h2>
-                            <p className="text-gray-600 mb-4">
-                                You need to run this file via a local web server.
-                            </p>
-                            <ul className="text-left list-disc pl-6 space-y-2 text-gray-700 mb-6">
-                                <li><strong>VS Code:</strong> Install the "Live Server" extension and click "Go Live".</li>
-                                <li><strong>Python:</strong> Run <code>python3 -m http.server</code> in the folder and go to <code>http://localhost:8000</code>.</li>
-                                <li><strong>Node:</strong> Run <code>npx serve</code> in the folder.</li>
-                            </ul>
-                            <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                                Retry
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
-
             if (!dbReady) return <div className="flex items-center justify-center h-screen">Loading Database...</div>;
 
             return (
@@ -1161,6 +1195,11 @@
                             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('dashboard')}>
                                 <Shield className="text-yellow-400" />
                                 <h1 className="text-xl font-bold tracking-tight">NavFit Web</h1>
+                                {storageMode && (
+                                    <span className={`text-xs px-2 py-1 rounded ml-2 ${storageMode.includes('Memory') ? 'bg-red-500 animate-pulse' : 'bg-green-600'}`}>
+                                        {storageMode}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => setView('profile')} className="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm flex items-center gap-2 border border-slate-600">
@@ -1175,6 +1214,11 @@
                                 </button>
                             </div>
                         </div>
+                        {storageMode && storageMode.includes('Memory') && (
+                            <div className="bg-red-600 text-white text-xs text-center py-1 font-bold">
+                                WARNING: You are in Memory Mode. Data will be LOST if you refresh. Please use "Backup JSON" frequently.
+                            </div>
+                        )}
                     </header>
 
                     {/* Main Content */}
