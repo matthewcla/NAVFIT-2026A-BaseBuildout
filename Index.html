@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavFit Web - Performance Evaluation System</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Screen Styles */
+        body { background-color: #f3f4f6; font-family: 'Inter', system-ui, sans-serif; }
+        
+        /* Print Styles - High Fidelity NAVPERS Replica */
+        @media print {
+            @page { margin: 0.25in; size: portrait; }
+            body { background-color: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            
+            .nav-form {
+                display: grid;
+                grid-template-columns: repeat(24, 1fr);
+                border: 2px solid black;
+                font-family: 'Courier New', monospace;
+                font-size: 9pt;
+                line-height: 1.1;
+                width: 100%;
+                max-width: 100%;
+            }
+            
+            .nav-block {
+                border: 1px solid black;
+                padding: 2px;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .nav-label {
+                font-size: 6pt;
+                font-family: sans-serif;
+                text-transform: uppercase;
+                color: #333;
+                position: absolute;
+                top: 1px;
+                left: 2px;
+            }
+            
+            .nav-content {
+                margin-top: 10px;
+                font-weight: bold;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .nav-text-area {
+                font-family: 'Courier New', monospace;
+                font-size: 10pt;
+                white-space: pre-wrap;
+                text-align: justify;
+                padding-top: 12px;
+            }
+            
+            /* Specific Utility Classes for Print Grid */
+            .col-span-1 { grid-column: span 1; }
+            .col-span-2 { grid-column: span 2; }
+            .col-span-3 { grid-column: span 3; }
+            .col-span-4 { grid-column: span 4; }
+            .col-span-6 { grid-column: span 6; }
+            .col-span-8 { grid-column: span 8; }
+            .col-span-12 { grid-column: span 12; }
+            .col-span-24 { grid-column: span 24; }
+            
+            .bg-shaded { background-color: #e5e7eb !important; }
+            .center-content { display: flex; align-items: center; justify-content: center; text-align: center; }
+        }
+        
+        .print-only { display: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Data Models & Constants ---
+
+        const TRAITS_OFFICER = [
+            { id: 'profExpertise', label: 'Professional Expertise' },
+            { id: 'equalOpp', label: 'Equal Opportunity' },
+            { id: 'milBearing', label: 'Military Bearing' },
+            { id: 'character', label: 'Character' },
+            { id: 'mission', label: 'Mission Accomplishment' },
+            { id: 'leadership', label: 'Leadership' },
+            { id: 'tactical', label: 'Tactical Performance' }
+        ];
+
+        const TRAITS_ENLISTED = [
+            { id: 'profKnowledge', label: 'Professional Knowledge' },
+            { id: 'qualityWork', label: 'Quality of Work' },
+            { id: 'equalOpp', label: 'Equal Opportunity' },
+            { id: 'milBearing', label: 'Mil Bearing / Character' },
+            { id: 'personalJob', label: 'Personal Job Accomplishment' },
+            { id: 'teamwork', label: 'Teamwork' },
+            { id: 'leadership', label: 'Leadership' }
+        ];
+
+        const PROMOTION_RECS = [
+            'NOB', 'Significant Problems', 'Progressing', 'Promotable', 'Must Promote', 'Early Promote'
+        ];
+
+        const EMPTY_REPORT = {
+            id: null,
+            type: 'Officer', // Officer or Enlisted
+            lastUpdated: Date.now(),
+            // Admin
+            lastName: '', firstName: '', mi: '', suffix: '',
+            grade: '', desig: '', ssn: '',
+            actInact: 'Active', uic: '', shipStation: '',
+            promoStatus: '', dateReported: '',
+            occasion: 'Periodic', 
+            periodFrom: '', periodTo: '',
+            typeReport: 'Regular',
+            // Senior
+            seniorName: '', seniorGrade: '', seniorDesig: '', seniorTitle: '', seniorUic: '', seniorSsn: '',
+            // Body
+            commandEmployment: '',
+            primaryDuties: '',
+            // Traits (Store as 1-5 or 0 for NOB)
+            traits: {
+                t1: 0, t2: 0, t3: 0, t4: 0, t5: 0, t6: 0, t7: 0
+            },
+            // Comments
+            comments: '',
+            // Recommendations
+            careerRec1: '', careerRec2: '',
+            promotionRec: 'Promotable',
+            // Summary
+            summaryGroupAvg: '0.00'
+        };
+
+        // --- Utility Functions ---
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        const calculateAverage = (traits) => {
+            let sum = 0;
+            let count = 0;
+            Object.values(traits).forEach(val => {
+                const num = parseFloat(val);
+                if (num > 0) {
+                    sum += num;
+                    count++;
+                }
+            });
+            return count === 0 ? '0.00' : (sum / count).toFixed(2);
+        };
+
+        // --- Icons (Internal Definition) ---
+        const Icons = {
+            Shield: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            ),
+            Upload: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            ),
+            Save: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            ),
+            FileOutput: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><path d="M9 15l3 3 3-3"/></svg>
+            ),
+            Plus: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            ),
+            Users: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            ),
+            Trash2: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            ),
+            Printer: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            ),
+            ChevronLeft: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 18 9 12 15 6"/></svg>
+            ),
+            AlertCircle: ({size=24, className=""}) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            )
+        };
+        
+        const { Save, Upload, Trash2, Printer, Plus, Users, FileOutput, Shield, ChevronLeft, AlertCircle } = Icons;
+
+        // --- Components ---
+
+        const IconBtn = ({ icon: Icon, label, onClick, color = "blue" }) => (
+            <button 
+                onClick={onClick}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors bg-${color}-600 hover:bg-${color}-700 text-white shadow-sm`}
+            >
+                <Icon size={16} />
+                {label}
+            </button>
+        );
+
+        const InputBlock = ({ label, value, onChange, className = "", placeholder = "" }) => (
+            <div className={`flex flex-col ${className}`}>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
+                <input 
+                    type="text" 
+                    value={value || ''} 
+                    onChange={e => onChange(e.target.value)}
+                    className="border border-gray-300 rounded p-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    placeholder={placeholder}
+                />
+            </div>
+        );
+
+        const SelectBlock = ({ label, value, onChange, options, className = "" }) => (
+            <div className={`flex flex-col ${className}`}>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
+                <select 
+                    value={value || options[0]} 
+                    onChange={e => onChange(e.target.value)}
+                    className="border border-gray-300 rounded p-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                    {options.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                </select>
+            </div>
+        );
+
+        // --- Print View Component (Hidden on Screen) ---
+        
+        const PrintView = ({ report }) => {
+            if (!report) return null;
+            
+            const traitLabels = report.type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
+            const avg = calculateAverage(report.traits);
+
+            const renderTraitBlock = (idx) => (
+                <div key={`trait-${idx}`} className="nav-block col-span-2 flex flex-col items-center justify-end pb-1 h-24" style={{borderTop: 'none'}}>
+                    <div className="nav-label text-center w-full" style={{top: '2px', fontSize: '5pt', lineHeight: '1'}}>
+                        {traitLabels[idx].label}
+                    </div>
+                    <div className="text-xl font-bold">{report.traits[`t${idx+1}`] > 0 ? report.traits[`t${idx+1}`] : 'NOB'}</div>
+                </div>
+            );
+
+            return (
+                <div className="print-only">
+                    {/* Header */}
+                    <div className="nav-form">
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">1. Name (Last, First MI Suffix)</span>
+                            <div className="nav-content">{`${report.lastName}, ${report.firstName} ${report.mi} ${report.suffix}`}</div>
+                        </div>
+                        <div className="nav-block col-span-3">
+                            <span className="nav-label">2. Grade/Rate</span>
+                            <div className="nav-content">{report.grade}</div>
+                        </div>
+                        <div className="nav-block col-span-3">
+                            <span className="nav-label">3. Desig</span>
+                            <div className="nav-content">{report.desig}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">4. SSN</span>
+                            <div className="nav-content">{report.ssn}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">5. Act/Inact</span>
+                            <div className="nav-content">{report.actInact}</div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="nav-block col-span-3">
+                            <span className="nav-label">6. UIC</span>
+                            <div className="nav-content">{report.uic}</div>
+                        </div>
+                        <div className="nav-block col-span-9">
+                            <span className="nav-label">7. Ship/Station</span>
+                            <div className="nav-content">{report.shipStation}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">8. Promotion Status</span>
+                            <div className="nav-content">{report.promoStatus}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">9. Date Reported</span>
+                            <div className="nav-content">{report.dateReported}</div>
+                        </div>
+
+                        {/* Row 3 - Occasion */}
+                        <div className="nav-block col-span-12">
+                            <span className="nav-label">10. Occasion for Report</span>
+                            <div className="nav-content">{report.occasion}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">14. Period of Report (From)</span>
+                            <div className="nav-content">{report.periodFrom}</div>
+                        </div>
+                        <div className="nav-block col-span-6">
+                            <span className="nav-label">15. To</span>
+                            <div className="nav-content">{report.periodTo}</div>
+                        </div>
+
+                        {/* Senior Data */}
+                         <div className="nav-block col-span-12 bg-shaded">
+                            <div className="center-content text-xs font-bold py-1">REPORTING SENIOR DATA</div>
+                        </div>
+                        <div className="nav-block col-span-12 bg-shaded">
+                             <div className="center-content text-xs font-bold py-1">TRAIT GRADES</div>
+                        </div>
+
+                        <div className="nav-block col-span-8">
+                            <span className="nav-label">22. Reporting Senior (Last, First MI)</span>
+                            <div className="nav-content">{report.seniorName}</div>
+                        </div>
+                        <div className="nav-block col-span-2">
+                            <span className="nav-label">23. Grade</span>
+                            <div className="nav-content">{report.seniorGrade}</div>
+                        </div>
+                        <div className="nav-block col-span-2">
+                            <span className="nav-label">24. Desig</span>
+                            <div className="nav-content">{report.seniorDesig}</div>
+                        </div>
+                        
+                        {/* Traits Header Grid */}
+                        {traitLabels.map((t, i) => (
+                             <div key={i} className="nav-block col-span-2 h-8 bg-shaded flex items-center justify-center text-center">
+                                <span style={{fontSize:'6pt'}}>{i+33}</span>
+                             </div>
+                        ))}
+
+                        <div className="nav-block col-span-8">
+                            <span className="nav-label">25. Title</span>
+                            <div className="nav-content">{report.seniorTitle}</div>
+                        </div>
+                        <div className="nav-block col-span-2">
+                            <span className="nav-label">26. UIC</span>
+                            <div className="nav-content">{report.seniorUic}</div>
+                        </div>
+                        <div className="nav-block col-span-2">
+                            <span className="nav-label">27. SSN</span>
+                            <div className="nav-content">{report.seniorSsn}</div>
+                        </div>
+
+                         {/* Traits Values Grid */}
+                         {Array.from({length: 7}).map((_, i) => renderTraitBlock(i))}
+
+
+                        {/* Text Areas */}
+                        <div className="nav-block col-span-24 h-24">
+                            <span className="nav-label">28. Command Employment and Command Achievements</span>
+                            <div className="nav-text-area">{report.commandEmployment}</div>
+                        </div>
+                        
+                        <div className="nav-block col-span-24 h-24">
+                            <span className="nav-label">29. Primary/Collateral/Watchstanding Duties</span>
+                            <div className="nav-text-area">{report.primaryDuties}</div>
+                        </div>
+
+                        {/* Averages */}
+                         <div className="nav-block col-span-12 bg-shaded flex justify-between px-2 items-center">
+                            <span className="text-xs font-bold">40. INDIVIDUAL TRAIT AVG:</span>
+                            <span className="text-lg font-bold">{avg}</span>
+                        </div>
+                         <div className="nav-block col-span-12 bg-shaded flex justify-between px-2 items-center">
+                            <span className="text-xs font-bold">45. SUMMARY GROUP AVG:</span>
+                            <span className="text-lg font-bold">{report.summaryGroupAvg}</span>
+                        </div>
+
+
+                        {/* Comments */}
+                        <div className="nav-block col-span-24" style={{height: '400px'}}>
+                            <span className="nav-label">43. Comments on Performance</span>
+                            <div className="nav-text-area">{report.comments}</div>
+                        </div>
+
+                        {/* Promotion */}
+                        <div className="nav-block col-span-24 bg-shaded h-16 flex flex-col justify-center px-2">
+                            <span className="nav-label">42. Promotion Recommendation</span>
+                            <div className="flex justify-between items-center mt-4 px-8">
+                                {PROMOTION_RECS.map(rec => (
+                                    <div key={rec} className="flex flex-col items-center">
+                                        <div className={`w-4 h-4 border border-black ${report.promotionRec === rec ? 'bg-black' : 'bg-white'}`}></div>
+                                        <span style={{fontSize: '6pt'}} className="mt-1">{rec.toUpperCase()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+
+        const NavFitApp = () => {
+            const [reports, setReports] = useState([]);
+            const [activeReportId, setActiveReportId] = useState(null);
+            const [view, setView] = useState('dashboard'); // dashboard, editor
+
+            // Load from LocalStorage on mount
+            useEffect(() => {
+                const saved = localStorage.getItem('navfit_reports');
+                if (saved) {
+                    setReports(JSON.parse(saved));
+                }
+            }, []);
+
+            // Save to LocalStorage whenever reports change
+            useEffect(() => {
+                localStorage.setItem('navfit_reports', JSON.stringify(reports));
+            }, [reports]);
+
+            const activeReport = reports.find(r => r.id === activeReportId) || EMPTY_REPORT;
+
+            const handleCreate = (type) => {
+                const newReport = { ...EMPTY_REPORT, id: generateId(), type };
+                setReports([newReport, ...reports]);
+                setActiveReportId(newReport.id);
+                setView('editor');
+            };
+
+            const handleDelete = (id, e) => {
+                e.stopPropagation();
+                if(confirm("Are you sure you want to delete this report?")) {
+                    setReports(reports.filter(r => r.id !== id));
+                    if(activeReportId === id) setView('dashboard');
+                }
+            };
+
+            const updateReport = (field, value) => {
+                const updated = reports.map(r => 
+                    r.id === activeReportId ? { ...r, [field]: value, lastUpdated: Date.now() } : r
+                );
+                setReports(updated);
+            };
+
+            const updateTrait = (traitKey, value) => {
+                const r = reports.find(x => x.id === activeReportId);
+                const newTraits = { ...r.traits, [traitKey]: value };
+                const updated = reports.map(rep => 
+                    rep.id === activeReportId ? { ...rep, traits: newTraits, lastUpdated: Date.now() } : rep
+                );
+                setReports(updated);
+            };
+
+            const handleExportJSON = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reports));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "navfit_backup.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            };
+
+            const handleExportCSV = () => {
+                // Flatten data for CSV
+                const headers = ["ID", "Last Name", "First Name", "Grade", "SSN", "Type", "Avg", "Prom Rec", "Comments"];
+                const rows = reports.map(r => [
+                    r.id, r.lastName, r.firstName, r.grade, r.ssn, r.type, calculateAverage(r.traits), r.promotionRec, `"${r.comments.replace(/"/g, '""')}"`
+                ]);
+                
+                let csvContent = "data:text/csv;charset=utf-8," 
+                    + headers.join(",") + "\n" 
+                    + rows.map(e => e.join(",")).join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "navfit_export_for_access.csv");
+                document.body.appendChild(link);
+                link.click();
+            };
+
+            const handleImportJSON = (event) => {
+                const fileReader = new FileReader();
+                fileReader.readAsText(event.target.files[0], "UTF-8");
+                fileReader.onload = e => {
+                    const parsed = JSON.parse(e.target.result);
+                    setReports([...parsed, ...reports]); // Append to existing
+                };
+            };
+
+            // Trait list based on active report type
+            const currentTraits = activeReport.type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
+
+            return (
+                <div className="min-h-screen">
+                    {/* Top Bar (No Print) */}
+                    <header className="bg-slate-800 text-white p-4 shadow-md no-print">
+                        <div className="container mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <Shield className="text-yellow-400" />
+                                <h1 className="text-xl font-bold tracking-tight">NavFit Web</h1>
+                            </div>
+                            <div className="flex gap-2">
+                                <label className="cursor-pointer bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm flex items-center gap-2">
+                                    <Upload size={14} /> Import JSON
+                                    <input type="file" className="hidden" onChange={handleImportJSON} accept=".json" />
+                                </label>
+                                <button onClick={handleExportJSON} className="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm flex items-center gap-2">
+                                    <Save size={14} /> Backup JSON
+                                </button>
+                                <button onClick={handleExportCSV} className="bg-green-700 hover:bg-green-600 px-3 py-2 rounded text-sm flex items-center gap-2">
+                                    <FileOutput size={14} /> Export CSV
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="container mx-auto p-4 no-print">
+                        {view === 'dashboard' ? (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center bg-white p-6 rounded-lg shadow">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-800">My Reports</h2>
+                                        <p className="text-gray-500">Manage and edit your fitness reports.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <IconBtn icon={Plus} label="New Officer FITREP" onClick={() => handleCreate('Officer')} />
+                                        <IconBtn icon={Users} label="New Enlisted EVAL" onClick={() => handleCreate('Enlisted')} color="indigo" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {reports.map(r => (
+                                        <div key={r.id} onClick={() => { setActiveReportId(r.id); setView('editor'); }} className="bg-white p-5 rounded-lg shadow hover:shadow-md cursor-pointer border border-gray-100 transition-all">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded ${r.type === 'Officer' ? 'bg-blue-100 text-blue-800' : 'bg-indigo-100 text-indigo-800'}`}>
+                                                    {r.type.toUpperCase()}
+                                                </span>
+                                                <button onClick={(e) => handleDelete(r.id, e)} className="text-gray-400 hover:text-red-500">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                            <h3 className="text-lg font-bold text-gray-800 truncate">
+                                                {r.lastName || 'Unknown'}, {r.firstName || 'New'}
+                                            </h3>
+                                            <div className="text-sm text-gray-600 mt-1">
+                                                {r.grade || 'No Rank'} • {calculateAverage(r.traits)} Avg
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-4">
+                                                Updated: {new Date(r.lastUpdated).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {reports.length === 0 && (
+                                        <div className="col-span-full text-center py-12 text-gray-400 bg-white rounded-lg border-dashed border-2 border-gray-200">
+                                            No reports found. Create one to get started.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-6">
+                                {/* Editor Toolbar */}
+                                <div className="flex justify-between items-center">
+                                    <button onClick={() => setView('dashboard')} className="flex items-center gap-1 text-gray-600 hover:text-gray-900">
+                                        <ChevronLeft size={20} /> Back to Dashboard
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <IconBtn icon={Printer} label="Print / PDF" onClick={() => window.print()} color="gray" />
+                                    </div>
+                                </div>
+
+                                {/* Form */}
+                                <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+                                    {/* Tabs (Simple Implementation) */}
+                                    <div className="bg-gray-50 border-b p-4">
+                                        <h2 className="text-lg font-bold">
+                                            Editing: {activeReport.lastName}, {activeReport.firstName} ({activeReport.grade})
+                                        </h2>
+                                    </div>
+
+                                    <div className="p-6 grid grid-cols-12 gap-6">
+                                        
+                                        {/* Section: Administrative */}
+                                        <div className="col-span-12">
+                                            <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-2 mb-4">1. Administrative Data</h3>
+                                            <div className="grid grid-cols-12 gap-4">
+                                                <InputBlock className="col-span-4" label="Last Name" value={activeReport.lastName} onChange={v => updateReport('lastName', v)} />
+                                                <InputBlock className="col-span-4" label="First Name" value={activeReport.firstName} onChange={v => updateReport('firstName', v)} />
+                                                <InputBlock className="col-span-2" label="MI" value={activeReport.mi} onChange={v => updateReport('mi', v)} />
+                                                <InputBlock className="col-span-2" label="Suffix" value={activeReport.suffix} onChange={v => updateReport('suffix', v)} />
+                                                
+                                                <InputBlock className="col-span-2" label="Grade/Rate" value={activeReport.grade} onChange={v => updateReport('grade', v)} />
+                                                <InputBlock className="col-span-2" label="Desig" value={activeReport.desig} onChange={v => updateReport('desig', v)} />
+                                                <InputBlock className="col-span-4" label="SSN" value={activeReport.ssn} onChange={v => updateReport('ssn', v)} />
+                                                <SelectBlock className="col-span-4" label="Status" value={activeReport.actInact} onChange={v => updateReport('actInact', v)} options={['Active', 'Inactive', 'FTS', 'Reserve']} />
+                                                
+                                                <InputBlock className="col-span-2" label="UIC" value={activeReport.uic} onChange={v => updateReport('uic', v)} />
+                                                <InputBlock className="col-span-5" label="Ship/Station" value={activeReport.shipStation} onChange={v => updateReport('shipStation', v)} />
+                                                <InputBlock className="col-span-5" label="Promotion Status" value={activeReport.promoStatus} onChange={v => updateReport('promoStatus', v)} />
+                                                
+                                                <SelectBlock className="col-span-4" label="Occasion" value={activeReport.occasion} onChange={v => updateReport('occasion', v)} options={['Periodic', 'Detachment', 'Promotion', 'Special']} />
+                                                <InputBlock className="col-span-4" label="Date From" value={activeReport.periodFrom} onChange={v => updateReport('periodFrom', v)} placeholder="YYMMM" />
+                                                <InputBlock className="col-span-4" label="Date To" value={activeReport.periodTo} onChange={v => updateReport('periodTo', v)} placeholder="YYMMM" />
+                                            </div>
+                                        </div>
+
+                                        {/* Section: Performance Traits */}
+                                        <div className="col-span-12 md:col-span-6 border-t md:border-t-0 md:border-l pt-6 md:pt-0 md:pl-6 border-gray-200">
+                                            <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-2 mb-4">2. Performance Traits</h3>
+                                            <div className="space-y-3">
+                                                {currentTraits.map((t, i) => (
+                                                    <div key={t.id} className="flex justify-between items-center">
+                                                        <label className="text-sm font-medium text-gray-700">{t.label}</label>
+                                                        <select 
+                                                            value={activeReport.traits[`t${i+1}`]} 
+                                                            onChange={e => updateTrait(`t${i+1}`, e.target.value)}
+                                                            className="border rounded p-1 w-24 text-center"
+                                                        >
+                                                            <option value="0">NOB</option>
+                                                            <option value="1">1.0</option>
+                                                            <option value="2">2.0</option>
+                                                            <option value="3">3.0</option>
+                                                            <option value="4">4.0</option>
+                                                            <option value="5">5.0</option>
+                                                        </select>
+                                                    </div>
+                                                ))}
+                                                <div className="mt-4 pt-4 border-t flex justify-between items-center bg-gray-50 p-2 rounded">
+                                                    <span className="font-bold text-gray-900">Calculated Average:</span>
+                                                    <span className="text-xl font-bold text-blue-600">{calculateAverage(activeReport.traits)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Section: Senior & Recommendation */}
+                                        <div className="col-span-12 md:col-span-6 pt-6 border-t border-gray-200">
+                                            <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-2 mb-4">3. Reporting Senior & Rec</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <InputBlock className="col-span-2" label="Reporting Senior Name" value={activeReport.seniorName} onChange={v => updateReport('seniorName', v)} />
+                                                <InputBlock label="Senior Grade" value={activeReport.seniorGrade} onChange={v => updateReport('seniorGrade', v)} />
+                                                <InputBlock label="Senior Title" value={activeReport.seniorTitle} onChange={v => updateReport('seniorTitle', v)} />
+                                                <div className="col-span-2">
+                                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1">Promotion Recommendation</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {PROMOTION_RECS.map(rec => (
+                                                            <button 
+                                                                key={rec}
+                                                                onClick={() => updateReport('promotionRec', rec)}
+                                                                className={`px-3 py-1 text-xs rounded border ${activeReport.promotionRec === rec ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'}`}
+                                                            >
+                                                                {rec}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <InputBlock label="Summary Group Avg" value={activeReport.summaryGroupAvg} onChange={v => updateReport('summaryGroupAvg', v)} />
+                                            </div>
+                                        </div>
+
+                                        {/* Section: Text Areas */}
+                                        <div className="col-span-12 pt-6 border-t border-gray-200">
+                                            <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-2 mb-4">4. Comments & Duties</h3>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 uppercase">Command Employment / Achievements</label>
+                                                    <textarea 
+                                                        className="w-full border rounded p-2 text-sm font-mono h-24" 
+                                                        value={activeReport.commandEmployment} 
+                                                        onChange={e => updateReport('commandEmployment', e.target.value)}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-500 uppercase">Primary Duties</label>
+                                                    <textarea 
+                                                        className="w-full border rounded p-2 text-sm font-mono h-24" 
+                                                        value={activeReport.primaryDuties} 
+                                                        onChange={e => updateReport('primaryDuties', e.target.value)}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="flex justify-between">
+                                                        <label className="text-xs font-bold text-gray-500 uppercase">Comments on Performance (Block 43)</label>
+                                                        <span className="text-xs text-gray-400">Approx Lines: {activeReport.comments.split('\n').length} / 18</span>
+                                                    </div>
+                                                    <textarea 
+                                                        className="w-full border rounded p-2 text-sm font-mono h-64" 
+                                                        value={activeReport.comments} 
+                                                        onChange={e => updateReport('comments', e.target.value)}
+                                                        placeholder="Enter bullets here..."
+                                                    />
+                                                    <div className="bg-yellow-50 text-yellow-800 text-xs p-2 rounded mt-2 flex items-center gap-2">
+                                                        <AlertCircle size={14} />
+                                                        <span>Note: Line count is an approximation. Verify in Print Preview.</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="bg-gray-800 text-gray-400 py-6 mt-12 no-print">
+                        <div className="container mx-auto text-center text-sm">
+                            <p>NavFit Web Replacement - Unofficial Tool.</p>
+                            <p className="mt-1 text-xs">This tool is client-side only. No data is sent to any server. Save your JSON backups regularly.</p>
+                        </div>
+                    </footer>
+
+                    {/* Print Only View */}
+                    <PrintView report={activeReport} />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<NavFitApp />);
+    </script>
+</body>
+</html>
