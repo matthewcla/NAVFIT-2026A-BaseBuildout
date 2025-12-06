@@ -4,10 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NavFit Web - Performance Evaluation System</title>
+    <title>NAVFIT 2030 - Performance Evaluation System</title>
 
-    <!-- React & ReactDOM -->
-    NAVFIT 2026A
+    <!-- React & ReactDOM (Requires Internet Access) -->
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
@@ -20,6 +19,16 @@
         body {
             background-color: #f3f4f6;
             font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        /* Loading / Error States */
+        #loading-fallback {
+            display: flex;
+            height: 100vh;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            color: #666;
         }
 
         /* Print Styles - High Fidelity NAVPERS Replica */
@@ -139,9 +148,31 @@
 </head>
 
 <body>
+    <!-- Root Element where React Renders -->
     <div id="root"></div>
 
+    <!-- Fallback/Loading Message (Replaced by React if successful) -->
+    <div id="loading-fallback">
+        <div style="text-align: center;">
+            <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;">Initializing NAVFIT 2030...</h2>
+            <p>If this message stays for more than 5 seconds, check your internet connection.</p>
+        </div>
+    </div>
+
+    <!-- Main Application Logic -->
     <script type="text/babel">
+        // --- SAFE INITIALIZATION CHECK ---
+        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+            document.getElementById('loading-fallback').innerHTML = `
+                <div style="color: red; text-align: center; padding: 20px; border: 2px solid red; background: #ffe6e6; max-width: 600px; margin: 20px auto;">
+                    <h2 style="font-weight: bold; font-size: 1.25rem;">System Error: React Not Loaded</h2>
+                    <p style="margin-top: 10px;">The application could not connect to the external libraries (React/ReactDOM).</p>
+                    <p style="margin-top: 10px; font-size: 0.9rem;"><strong>Troubleshooting:</strong><br/>1. Ensure you have an active internet connection.<br/>2. If on a secure network (NIPR), these CDNs may be blocked.</p>
+                </div>
+            `;
+            throw new Error("React is not defined. Halting execution.");
+        }
+
         const { useState, useEffect, useRef } = React;
 
         // --- Data Models & Constants ---
@@ -741,7 +772,7 @@
             // For this MVP, we'll assume the user selected them or we're showing all active reports of same type/grade
 
             const [localReports, setLocalReports] = useState(reports);
-            const type = reports[0]?.type || 'Officer';
+            const type = (reports[0] && reports[0].type) || 'Officer';
             const traits = type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
 
             useEffect(() => {
@@ -977,14 +1008,14 @@
                                             type="number"
                                             className="border rounded p-1 w-full"
                                             placeholder="0"
-                                            value={formData.rscaHistory[pg]?.reportCount || ''}
+                                            value={(formData.rscaHistory[pg] && formData.rscaHistory[pg].reportCount) || ''}
                                             onChange={e => updateRsca(pg, 'reportCount', e.target.value)}
                                         />
                                         <input
                                             type="number"
                                             className="border rounded p-1 w-full"
                                             placeholder="0.00"
-                                            value={formData.rscaHistory[pg]?.cumulativeSum || ''}
+                                            value={(formData.rscaHistory[pg] && formData.rscaHistory[pg].cumulativeSum) || ''}
                                             onChange={e => updateRsca(pg, 'cumulativeSum', e.target.value)}
                                         />
                                         <div className="font-bold text-blue-600">{calculateRsca(pg)}</div>
@@ -1020,6 +1051,10 @@
                     await db.init();
                     setStorageMode(db.mode);
                     setDbReady(true);
+
+                    // Remove fallback loader once React mounts
+                    const loader = document.getElementById('loading-fallback');
+                    if (loader) loader.style.display = 'none';
 
                     const savedReports = await db.getAll('reports');
                     setReports(savedReports);
@@ -1186,7 +1221,7 @@
 
             const currentTraits = activeReport.type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
 
-            if (!dbReady) return <div className="flex items-center justify-center h-screen">Loading Database...</div>;
+            if (!dbReady) return null; // Logic handled by fallback div
 
             return (
                 <div className="min-h-screen">
@@ -1216,7 +1251,7 @@
                             </div>
                         </div>
                         {storageMode && storageMode.includes('Memory') && (
-                            <div className="bg-red-600 text-white text-xs text-center py-1 font-bold">
+                            <div className="bg-red-600 text-white text-xs text-center py-1 font-bold mt-2 rounded">
                                 WARNING: You are in Memory Mode. Data will be LOST if you refresh. Please use "Backup JSON" frequently.
                             </div>
                         )}
@@ -1233,14 +1268,14 @@
                                     </div>
                                     <div className="flex gap-2 items-center">
                                         {selectedReports.length > 0 && (
-                                            <>
+                                            <React.Fragment>
                                                 <button onClick={handleOpenMatrix} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-bold shadow">
                                                     Matrix View
                                                 </button>
                                                 <button onClick={handleOpenOptimization} className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded text-sm font-bold shadow">
                                                     Optimize
                                                 </button>
-                                            </>
+                                            </React.Fragment>
                                         )}
                                         <div className="h-6 w-px bg-gray-300 mx-2"></div>
                                         <IconBtn icon={Plus} label="New Officer FITREP" onClick={() => handleCreate('Officer')} />
@@ -1448,7 +1483,7 @@
                     {/* Footer */}
                     <footer className="bg-gray-800 text-gray-400 py-6 mt-12 no-print">
                         <div className="container mx-auto text-center text-sm">
-                            <p>NavFit Web Replacement - Unofficial Tool.</p>
+                            <p>NAVFIT 2030 - Unofficial Tool.</p>
                             <p className="mt-1 text-xs">This tool is client-side only. No data is sent to any server. Save your JSON backups regularly.</p>
                         </div>
                     </footer>
