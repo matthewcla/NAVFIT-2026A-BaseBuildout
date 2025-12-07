@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import type { RootState } from '../../store/store';
 import { Plus, FileText, Trash2 } from 'lucide-react';
 import { reportsSelectors, addReport, removeReport, type EvaluationReport } from '../../store/reportsSlice';
 import { ReportEditor } from './ReportEditor.tsx';
@@ -8,7 +9,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export const ReportsDashboard = () => {
     // @ts-ignore - Assuming store setup is standard, we'll fix strict types if needed
-    const reports = useSelector(state => reportsSelectors.selectAll(state));
+    const reports = useSelector((state: RootState) => reportsSelectors.selectAll(state.reports));
     const dispatch = useDispatch();
 
     const [editingReportId, setEditingReportId] = useState<string | null>(null);
