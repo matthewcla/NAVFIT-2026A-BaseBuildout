@@ -1,0 +1,29 @@
+[
+    {
+        "id": "O4_LINE_FY26",
+        "name": "FY-26 Active-Duty Lieutenant Commander Line",
+        "conveningDate": "2025-05-12",
+        "eligibleGrades": [
+            "O-3"
+        ],
+        "notes": "Last periodic report before board is Jan 31, 2025."
+    },
+    {
+        "id": "O5_LINE_FY26",
+        "name": "FY-26 Active-Duty Commander Line",
+        "conveningDate": "2025-02-14",
+        "eligibleGrades": [
+            "O-4"
+        ],
+        "notes": "Maintain RSCA < 3.80 to support EP breakouts."
+    },
+    {
+        "id": "O6_LINE_FY26",
+        "name": "FY-26 Active-Duty Captain Line",
+        "conveningDate": "2025-01-15",
+        "eligibleGrades": [
+            "O-5"
+        ],
+        "notes": "Critical milestone."
+    }
+]
