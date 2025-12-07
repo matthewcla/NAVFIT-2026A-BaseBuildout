@@ -10,12 +10,17 @@ export interface EvaluationReport {
     seniorId: string | null; // FK to Senior (if we track seniors separately)
 
     // Admin Data (Snapshot)
+    type: 'Officer' | 'Chief' | 'Enlisted'; // Distinguishes report type
+    lastName: string;
+    firstName: string;
+    mi: string;
+    suffix: string;
     grade: string;
     designator: string;
     uic: string;
     shipStation: string;
     promotionStatus: string;
-    dateReported: string; // ISO Date
+    dateReported: string; // ISO Date;
 
     // Occasion
     occasion: 'Periodic' | 'Detachment' | 'Promotion' | 'Special';

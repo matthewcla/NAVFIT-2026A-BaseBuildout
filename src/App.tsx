@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LayoutDashboard, Users, FileText } from 'lucide-react'
 import { PersonnelDashboard } from './features/personnel/PersonnelDashboard';
+import { ReportsDashboard } from './features/reports/ReportsDashboard';
 import { OptimizationSandbox } from './features/optimization/OptimizationSandbox';
 
 function App() {
@@ -82,6 +83,8 @@ function App() {
 
         {/* Content Area */}
         {activeTab === 'roster' && <PersonnelDashboard />}
+
+        {activeTab === 'reports' && <ReportsDashboard />}
 
         {activeTab === 'optimization' && <OptimizationSandbox />}
       </main>
