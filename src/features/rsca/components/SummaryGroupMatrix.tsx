@@ -64,7 +64,7 @@ export const SummaryGroupMatrix: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                                    [{m.traits.t1},{m.traits.t2},{m.traits.t3},{m.traits.t4},{m.traits.t5},{m.traits.t6},{m.traits.t7}]
+                                    [{m.traits.professionalKnowledge},{m.traits.commandClimate},{m.traits.militaryBearing},{m.traits.character},{m.traits.teamwork},{m.traits.leadership},{m.traits.equalOpportunity}]
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center">
                                     {m.priorAverageWithSenior === null ? (
