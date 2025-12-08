@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import rosterReducer from './rosterSlice.ts';
 import reportsReducer from './reportsSlice.ts';
 import boardsReducer from './boardsSlice.ts';
+import rscaReducer from '../features/rsca/rscaSlice.ts';
 
 export const store = configureStore({
     reducer: {
         roster: rosterReducer,
         reports: reportsReducer,
         boards: boardsReducer,
+        rsca: rscaReducer,
     },
 });
 

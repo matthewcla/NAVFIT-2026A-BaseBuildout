@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { LayoutDashboard, Users, FileText } from 'lucide-react'
 import { PersonnelDashboard } from './features/personnel/PersonnelDashboard';
 import { ReportsDashboard } from './features/reports/ReportsDashboard';
-import { OptimizationSandbox } from './features/optimization/OptimizationSandbox';
+import { RSCADashboard } from './features/rsca/RSCADashboard';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -86,7 +86,7 @@ function App() {
 
         {activeTab === 'reports' && <ReportsDashboard />}
 
-        {activeTab === 'optimization' && <OptimizationSandbox />}
+        {activeTab === 'optimization' && <RSCADashboard />}
       </main>
     </div>
   )

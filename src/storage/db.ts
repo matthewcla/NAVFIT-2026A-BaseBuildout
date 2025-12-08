@@ -35,7 +35,7 @@ const DB_VERSION = 2; // Incremented for Phase 1
 
 export async function initDB() {
     return openDB<NavFitDB>(DB_NAME, DB_VERSION, {
-        upgrade(db: any, oldVersion, newVersion, transaction) {
+        upgrade(db: any, _oldVersion, _newVersion, transaction) {
             if (!db.objectStoreNames.contains('roster')) {
                 db.createObjectStore('roster', { keyPath: 'id' });
             }
