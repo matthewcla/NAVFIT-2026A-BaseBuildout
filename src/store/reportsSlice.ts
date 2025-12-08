@@ -7,7 +7,7 @@ export interface TraitScores {
 export interface EvaluationReport {
     id: string;
     memberId: string; // FK to Roster
-    seniorId: string | null; // FK to Senior (if we track seniors separately)
+    reportingSeniorId: string; // FK to ReportingSenior
 
     // Admin Data (Snapshot)
     type: 'Officer' | 'Chief' | 'Enlisted'; // Distinguishes report type
