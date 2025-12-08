@@ -1,17 +1,8 @@
-
-export interface TraitConfiguration {
-    t1: number;
-    t2: number;
-    t3: number;
-    t4: number;
-    t5: number;
-    t6: number;
-    t7: number;
-}
+import type { PerformanceTraits } from '../../../store/reportsSlice';
 
 export interface SolverResult {
     success: boolean;
-    traits: TraitConfiguration;
+    traits: PerformanceTraits;
     actualAverage: number;
     message?: string;
 }
@@ -20,7 +11,8 @@ export interface SolverResult {
  * Reverse-calculates integer traits to achieve a target average.
  * 
  * @param targetAvg The desired average (e.g. 3.80)
- * @param nobVector Boolean array [t1_nob, ..., t7_nob]. True means NOB (ignored).
+ * @param nobVector Boolean array [t1, ..., t7]. True means NOB (ignored).
+ *                  Order: Prof, Cmd, Mil, Char, Team, Lead, EqOpp.
  * @returns SolverResult containing the calculated traits and realized average.
  */
 export function solveTraits(targetAvg: number, nobVector: boolean[]): SolverResult {
@@ -61,8 +53,6 @@ export function solveTraits(targetAvg: number, nobVector: boolean[]): SolverResu
 
     // 3. Floor Strategy
     // Requirements: If Target >= 3.0, floor is 3. Else 1.
-    // This prevents generating 2s or 1s for a "good" sailor just to hit a precise math average,
-    // unless the target itself implies a bad report.
     const floorValue = targetAvg >= 3.0 ? 3 : 1;
 
     // Initialize traits with floor value
@@ -77,16 +67,6 @@ export function solveTraits(targetAvg: number, nobVector: boolean[]): SolverResu
     // 4. Distribute Remaining Points
     let pointsNeeded = requiredPoints - currentPoints;
 
-    // If pointsNeeded is negative (e.g. target 2.0 but floor 3 forced 3.0),
-    // we might need to reduce. But our requirement says "If Target >= 3.0, no generated trait can be < 3".
-    // So if Target >= 3.0, we stick with the floor, even if it exceeds the target.
-    // Example: Target 2.8, Floor 1. we iterate up.
-    // Example: Target 3.2, Floor 3. We iterate up.
-    // Example: Target 2.9 (Floor 1). We iterate up.
-
-    // However, if we overshoot because of the floor (Target 2.5, but we decided Floor 3? No, logic says target < 3 -> floor 1).
-    // So usually pointsNeeded >= 0 given the floor definitions.
-
     // Pass 1: Simple distribution
     let activeIdxPointer = 0;
     while (pointsNeeded > 0) {
@@ -100,7 +80,7 @@ export function solveTraits(targetAvg: number, nobVector: boolean[]): SolverResu
         // Move pointer, wrap around
         activeIdxPointer = (activeIdxPointer + 1) % activeCount;
 
-        // Safety break if infinite (should be impossible due to maxPoints cap)
+        // Safety break if infinite
         if (pointsNeeded > 0 && isAllMaxed(traitValues, activeIndices)) {
             break;
         }
@@ -118,15 +98,24 @@ export function solveTraits(targetAvg: number, nobVector: boolean[]): SolverResu
     };
 }
 
-function createTraitConfig(values: number[]): TraitConfiguration {
+function createTraitConfig(values: number[]): PerformanceTraits {
+    // Map array index to correct keys based on reportsSlice definition Order
+    // Blk 33 (0) -> professionalKnowledge
+    // Blk 34 (1) -> commandClimate
+    // Blk 35 (2) -> militaryBearing
+    // Blk 36 (3) -> character
+    // Blk 37 (4) -> teamwork
+    // Blk 38 (5) -> leadership
+    // Blk 39 (6) -> equalOpportunity
+
     return {
-        t1: values[0],
-        t2: values[1],
-        t3: values[2],
-        t4: values[3],
-        t5: values[4],
-        t6: values[5],
-        t7: values[6],
+        professionalKnowledge: values[0],
+        commandClimate: values[1],
+        militaryBearing: values[2],
+        character: values[3],
+        teamwork: values[4],
+        leadership: values[5],
+        equalOpportunity: values[6],
     };
 }
 

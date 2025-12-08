@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit';
 import { storage, type ReportingSenior } from '../../storage/db';
 import { getRecommendedAverage } from './logic/trendOptimizer';
-import { solveTraits, type TraitConfiguration } from './logic/traitSolver';
+import { solveTraits } from './logic/traitSolver';
 import type { RootState } from '../../store/store';
-import { addReport, type EvaluationReport } from '../../store/reportsSlice';
+import { addReport, type EvaluationReport, type PerformanceTraits } from '../../store/reportsSlice';
 
 
 // --- Types ---
@@ -20,8 +20,8 @@ export interface ScenarioMember {
     targetAverage: number;      // The user's input
 
     // Solution
-    traits: TraitConfiguration;
-    isNOB: boolean[]; // [t1, t2, ..., t7]
+    traits: PerformanceTraits;
+    isNOB: boolean[]; // [Prof, Cmd, Mil, Char, Team, Lead, EqOpp]
 
     // Realized
     actualAverage: number;
@@ -126,16 +126,8 @@ export const commitScenario = createAsyncThunk(
                 // Generate a report ID
                 const reportId = crypto.randomUUID();
 
-                // Map traits to new PerformanceTraits format
-                const newTraits = {
-                    professionalKnowledge: m.traits.t1,
-                    commandClimate: m.traits.t2,
-                    militaryBearing: m.traits.t3,
-                    character: m.traits.t4,
-                    teamwork: m.traits.t5,
-                    leadership: m.traits.t6,
-                    equalOpportunity: m.traits.t7,
-                };
+                // Traits are already in PerformanceTraits format
+                const newTraits = m.traits;
 
                 const report: EvaluationReport = {
                     id: reportId,
@@ -237,7 +229,7 @@ const rscaSlice = createSlice({
             // Update Projected Group RSCA
             recalculateProjectedRSCA(state);
         },
-        toggleNOB: (_state, _action: PayloadAction<{ memberId: string, traitKey: keyof TraitConfiguration }>) => {
+        toggleNOB: (_state, _action: PayloadAction<{ memberId: string, traitKey: keyof PerformanceTraits }>) => {
             // To implement later if UI allows toggling specific NOBs
             // For now, logic assumes we pass the whole vector or indices
         },
