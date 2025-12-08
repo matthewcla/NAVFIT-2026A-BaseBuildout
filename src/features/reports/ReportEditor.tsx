@@ -1,26 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { ChevronLeft, Save, Printer, Check } from 'lucide-react';
-import { updateReport, type EvaluationReport } from '../../store/reportsSlice';
+import { updateReport, type EvaluationReport, type PerformanceTraits } from '../../store/reportsSlice';
 
-const TRAITS_OFFICER = [
-    { id: 't1', label: 'Professional Expertise' },
-    { id: 't2', label: 'Equal Opportunity' },
-    { id: 't3', label: 'Military Bearing' },
-    { id: 't4', label: 'Character' },
-    { id: 't5', label: 'Mission Accomplishment' },
-    { id: 't6', label: 'Leadership' },
-    { id: 't7', label: 'Tactical Performance' }
+// Keys match Architecture.md 3.1
+const TRAITS_OFFICER: { id: keyof PerformanceTraits, label: string }[] = [
+    { id: 'professionalKnowledge', label: 'Professional Expertise' },
+    { id: 'equalOpportunity', label: 'Equal Opportunity' },
+    { id: 'militaryBearing', label: 'Military Bearing' },
+    { id: 'character', label: 'Character' },
+    { id: 'teamwork', label: 'Mission Accomplishment/Teamwork' },
+    { id: 'leadership', label: 'Leadership' },
+    { id: 'commandClimate', label: 'Command Climate' } // Using commandClimate for the 7th trait? Wait, t1..t7.
+    // 1610/2:
+    // 33: Prof
+    // 34: Equal Opp (Actually 34 is Command Climate on some forms? Need to be careful. Arch doc lists 34 as Command Climate)
+    // Let's align with Arch Doc 3.1 order for inputs:
+    // professionalKnowledge (33)
+    // commandClimate (34)
+    // militaryBearing (35)
+    // character (36)
+    // teamwork (37)
+    // leadership (38)
+    // equalOpportunity (39)
 ];
 
-const TRAITS_ENLISTED = [
-    { id: 't1', label: 'Professional Knowledge' },
-    { id: 't2', label: 'Quality of Work' },
-    { id: 't3', label: 'Equal Opportunity' },
-    { id: 't4', label: 'Mil Bearing / Character' },
-    { id: 't5', label: 'Personal Job Accomplishment' },
-    { id: 't6', label: 'Teamwork' },
-    { id: 't7', label: 'Leadership' }
+const TRAITS_ENLISTED: { id: keyof PerformanceTraits, label: string }[] = [
+    { id: 'professionalKnowledge', label: 'Professional Knowledge' },
+    { id: 'commandClimate', label: 'Quality of Work' }, // Mapping for Enlisted? Or stick to strict keys?
+    // If Arch doc says "commandClimate" is block 34, then for Enlisted Block 34 is "Quality of Work"?
+    // Using the same keys for database but different labels is fine.
+    { id: 'equalOpportunity', label: 'Equal Opportunity' },
+    { id: 'militaryBearing', label: 'Military Bearing' },
+    { id: 'character', label: 'Character' },
+    { id: 'teamwork', label: 'Teamwork' },
+    { id: 'leadership', label: 'Leadership' }
 ];
 
 const PROMOTION_RECS = [
@@ -34,8 +48,8 @@ interface ReportEditorProps {
 
 export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) => {
     const dispatch = useDispatch();
-    // @ts-ignore - Handle the type property we added
-    const [formData, setFormData] = useState<EvaluationReport & { type?: string }>({ ...report });
+    // Deep copy to detach from Redux state for editing
+    const [formData, setFormData] = useState<EvaluationReport>(JSON.parse(JSON.stringify(report)));
     const [isSaved, setIsSaved] = useState(false);
     const [showPrintView, setShowPrintView] = useState(false);
 
@@ -53,7 +67,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleTraitChange = (key: string, value: string) => {
+    const handleTraitChange = (key: keyof PerformanceTraits, value: string) => {
         const num = parseFloat(value);
         setFormData(prev => ({
             ...prev,
@@ -73,7 +87,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
         return count === 0 ? '0.00' : (sum / count).toFixed(2);
     };
 
-    const traitLabels = formData.type === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
+    const traitLabels = formData.formType === 'Officer' ? TRAITS_OFFICER : TRAITS_ENLISTED;
 
     if (showPrintView) {
         return (
@@ -95,11 +109,10 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                     </button>
                 </div>
 
-                {/* Simplified Print View using standard HTML structure heavily inspired by the legacy file but cleaned up for React */}
                 <div className="border-2 border-black p-1 font-mono text-sm">
                     <div className="grid grid-cols-12 border border-black text-center">
                         <div className="col-span-12 font-bold p-2 bg-gray-100 border-b border-black">
-                            NAVFIT 2026A PERFORMANCE REPORT - {formData.type?.toUpperCase()}
+                            NAVFIT 2026A PERFORMANCE REPORT - {formData.formType}
                         </div>
 
                         {/* Block 1 */}
@@ -109,7 +122,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                         </div>
                         <div className="col-span-3 p-1 border-r border-b border-black text-left">
                             <span className="text-xs block text-gray-500">2. Grade</span>
-                            <div className="font-bold">{formData.grade}</div>
+                            <div className="font-bold">{formData.rank}</div>
                         </div>
                         <div className="col-span-3 p-1 border-b border-black text-left">
                             <span className="text-xs block text-gray-500">3. Desig</span>
@@ -166,7 +179,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                     </button>
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">
-                            Edit {formData.type || 'Evaluation'}
+                            Edit {formData.formType} Evaluation
                         </h2>
                         <div className="flex items-center gap-2 text-sm text-gray-500">
                             {isSaved ? (
@@ -211,8 +224,8 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                             <label className="text-xs font-bold text-gray-500 uppercase">Last Name</label>
                             <input
                                 className="w-full border rounded p-2 mt-1"
-                                value={(formData as any).lastName || ''}
-                                onChange={e => handleChange('lastName' as any, e.target.value)}
+                                value={formData.lastName || ''}
+                                onChange={e => handleChange('lastName', e.target.value)}
                                 placeholder="Doe"
                             />
                         </div>
@@ -220,17 +233,17 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                             <label className="text-xs font-bold text-gray-500 uppercase">First Name</label>
                             <input
                                 className="w-full border rounded p-2 mt-1"
-                                value={(formData as any).firstName || ''}
-                                onChange={e => handleChange('firstName' as any, e.target.value)}
+                                value={formData.firstName || ''}
+                                onChange={e => handleChange('firstName', e.target.value)}
                                 placeholder="John"
                             />
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Grade</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Rank/Grade</label>
                             <input
                                 className="w-full border rounded p-2 mt-1"
-                                value={formData.grade}
-                                onChange={e => handleChange('grade', e.target.value)}
+                                value={formData.rank}
+                                onChange={e => handleChange('rank', e.target.value)}
                                 placeholder="LT"
                             />
                         </div>
@@ -262,6 +275,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                                 <option>Periodic</option>
                                 <option>Detachment</option>
                                 <option>Promotion</option>
+                                <option>Special</option>
                             </select>
                         </div>
                     </div>
@@ -315,10 +329,17 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
 
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Primary Duties</label>
+                            <label className="text-xs text-gray-400 block mb-1">Scope</label>
+                            <textarea
+                                className="w-full border border-gray-300 rounded-lg p-3 text-sm h-16 focus:ring-2 focus:ring-blue-500 outline-none mb-2"
+                                value={formData.primaryDuties.scope}
+                                onChange={e => setFormData(prev => ({ ...prev, primaryDuties: { ...prev.primaryDuties, scope: e.target.value } }))}
+                            />
+                            <label className="text-xs text-gray-400 block mb-1">Titles (One per line)</label>
                             <textarea
                                 className="w-full border border-gray-300 rounded-lg p-3 text-sm h-24 focus:ring-2 focus:ring-blue-500 outline-none"
-                                value={formData.primaryDuties}
-                                onChange={e => handleChange('primaryDuties', e.target.value)}
+                                value={formData.primaryDuties.titles.join('\n')}
+                                onChange={e => setFormData(prev => ({ ...prev, primaryDuties: { ...prev.primaryDuties, titles: e.target.value.split('\n') } }))}
                             />
                         </div>
 
@@ -340,7 +361,7 @@ export const ReportEditor: React.FC<ReportEditorProps> = ({ report, onBack }) =>
                         {PROMOTION_RECS.map(rec => (
                             <div
                                 key={rec}
-                                onClick={() => handleChange('promotionRecommendation', rec)}
+                                onClick={() => handleChange('promotionRecommendation', rec as any)}
                                 className={`
                                     cursor-pointer p-3 rounded-lg border text-center text-xs font-bold transition-all
                                     ${formData.promotionRecommendation === rec

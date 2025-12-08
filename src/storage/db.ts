@@ -31,7 +31,7 @@ interface NavFitDB extends DBSchema {
 }
 
 const DB_NAME = 'navfit-dss-db';
-const DB_VERSION = 2; // Incremented for Phase 1
+const DB_VERSION = 3; // Incremented for Phase 1 (Full Fidelity)
 
 export async function initDB() {
     return openDB<NavFitDB>(DB_NAME, DB_VERSION, {
@@ -124,7 +124,8 @@ export const storage = {
         // Filter by memberId and sort by date (descending) to find the most recent
         const memberReports = reportsBySenior
             .filter(r => r.memberId === memberId)
-            .sort((a, b) => new Date(b.periodTo).getTime() - new Date(a.periodTo).getTime());
+            // Use revised date field 'endDate'
+            .sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
 
         return memberReports.length > 0 ? memberReports[0] : undefined;
     }

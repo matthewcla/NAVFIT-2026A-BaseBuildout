@@ -14,36 +14,56 @@ export const ReportsDashboard = () => {
 
     const [editingReportId, setEditingReportId] = useState<string | null>(null);
 
-    const handleCreateReport = (type: 'Officer' | 'Chief' | 'Enlisted') => {
+    const handleCreateReport = (formType: 'Officer' | 'Chief' | 'Enlisted') => {
         const newReport: EvaluationReport = {
             id: generateId(),
             memberId: '', // To be linked
-            seniorId: null,
-            type: type,
+            reportingSeniorId: '',
+            formType: formType, // UI distinction
+
             // Admin
             lastName: '', firstName: '', mi: '', suffix: '',
-            grade: '', designator: '', uic: '', shipStation: '',
-            promotionStatus: '', dateReported: '',
-            occasion: 'Periodic', periodFrom: '', periodTo: '',
-            reportType: 'Regular',
-            // Body
-            commandEmployment: '', primaryDuties: '', comments: '',
+            rank: '', designator: '', uic: '', shipStation: '',
+            promotionStatus: 'Regular', dateReported: new Date().toISOString(),
+
+            // Occasion
+            occasion: 'Periodic',
+            startDate: new Date().toISOString(),
+            endDate: new Date().toISOString(),
+
+            // Type & Status
+            type: 'Regular',
+            physicalReadiness: 'P',
+            billetSubcategory: 'NA',
+
+            // Duties
+            commandEmployment: '',
+            primaryDuties: { scope: '', titles: [] },
+
+            // Counseling
+            dateCounseled: new Date().toISOString(),
+            counselorName: '',
+
+            comments: '',
+
             // Scores (Default 0s)
-            traits: { t1: 0, t2: 0, t3: 0, t4: 0, t5: 0, t6: 0, t7: 0 },
+            traits: {
+                professionalKnowledge: 0,
+                commandClimate: 0,
+                militaryBearing: 0,
+                character: 0,
+                teamwork: 0,
+                leadership: 0,
+                equalOpportunity: 0
+            },
             promotionRecommendation: 'Promotable',
-            summaryGroupAverage: 0
+            summaryGroupAverage: 0,
+
+            // Signatures
+            dateSignedSenior: null,
+            dateSignedMember: null
         };
 
-        // We need to extend the type in the slice if it doesn't have 'type'. 
-        // Looking at the slice file I read earlier, it DID have 'grade' etc, but I don't recall seeing 'type' or 'reportType' used for Officer vs Enlisted distinction clearly other than inferred.
-        // Wait, the slice interface 'EvaluationReport' had 'reportType' ('Regular' | 'Concurrent'). 
-        // It did NOT have a field for 'Officer' vs 'Enlisted' distinction explicitly in the interface I read?
-        // Let me re-read the slice content in my memory or just add it. 
-        // The slice showed: `occasion`, `reportType` (Regular/Concurrent). 
-        // It did NOT show `type` (Officer/Enlisted). I should probably add that to the slice or just overload one of the fields?
-        // No, I'll add it to the object and if TS complains I'll update the slice.
-
-        // @ts-ignore
         dispatch(addReport(newReport));
         setEditingReportId(newReport.id);
     };
@@ -113,7 +133,7 @@ export const ReportsDashboard = () => {
                             className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-blue-300 transition-all cursor-pointer group"
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div className={`p-2 rounded-lg ${report.type === 'Officer' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
+                                <div className={`p-2 rounded-lg ${report.formType === 'Officer' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
                                     <FileText size={24} />
                                 </div>
                                 <button
@@ -124,7 +144,7 @@ export const ReportsDashboard = () => {
                                 </button>
                             </div>
 
-                            <h3 className="font-bold text-gray-800">{report.grade} {report.lastName ? `${report.lastName}, ${report.firstName}` : '(Untitled Report)'}</h3>
+                            <h3 className="font-bold text-gray-800">{report.rank} {report.lastName ? `${report.lastName}, ${report.firstName}` : '(Untitled Report)'}</h3>
                             <p className="text-sm text-gray-500 mb-4">{report.designator ? `Desig: ${report.designator}` : 'No Designator'}</p>
 
                             <div className="flex items-center justify-between text-xs text-gray-400 pt-4 border-t border-gray-100">
